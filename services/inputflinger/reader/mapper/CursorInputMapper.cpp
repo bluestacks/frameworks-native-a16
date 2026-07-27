@@ -83,15 +83,29 @@ void CursorMotionAccumulator::process(const RawEvent& rawEvent) {
         switch (rawEvent.code) {
             case REL_X:
                 mRelX = rawEvent.value;
+                mMoved = true;
                 break;
             case REL_Y:
                 mRelY = rawEvent.value;
+                mMoved = true;
+                break;
+        }
+    } else if (rawEvent.type == EV_ABS) {
+        switch (rawEvent.code) {
+            case ABS_X:
+                mAbsX = rawEvent.value;
+                mMoved = true;
+                break;
+            case ABS_Y:
+                mAbsY = rawEvent.value;
+                mMoved = true;
                 break;
         }
     }
 }
 
 void CursorMotionAccumulator::finishSync() {
+    mMoved = false; // BS-A16
     clearRelativeAxes();
 }
 
@@ -225,6 +239,7 @@ void CursorInputMapper::dumpParameters(std::string& dump) {
                          toString(mParameters.hasAssociatedDisplay));
     dump += StringPrintf(INDENT4 "Mode: %s\n", ftl::enum_string(mParameters.mode).c_str());
     dump += StringPrintf(INDENT4 "OrientationAware: %s\n", toString(mParameters.orientationAware));
+    dump += StringPrintf(INDENT4 "Absolute Axis: %s\n", toString(mParameters.hasAbsAxis));
 }
 
 std::list<NotifyArgs> CursorInputMapper::reset(nsecs_t when) {
@@ -260,6 +275,29 @@ std::list<NotifyArgs> CursorInputMapper::process(const RawEvent& rawEvent) {
     return out;
 }
 
+// BS-A16: Rotate absolute coordinates based on display orientation
+void CursorInputMapper::rotateAbsolute(float* absX, float* absY) {
+    float temp;
+    switch (mOrientation) {
+    case ui::ROTATION_90:
+        temp = *absX;
+        *absX = *absY;
+        *absY = ((mRawAbsXInfo.maxValue - mRawAbsXInfo.minValue) + 1) - temp;
+        break;
+    case ui::ROTATION_180:
+        *absX = ((mRawAbsXInfo.maxValue - mRawAbsXInfo.minValue) + 1) - *absX;
+        *absY = ((mRawAbsYInfo.maxValue - mRawAbsYInfo.minValue) + 1) - *absY;
+        break;
+    case ui::ROTATION_270:
+        temp = *absX;
+        *absX = ((mRawAbsYInfo.maxValue - mRawAbsYInfo.minValue) + 1) - *absY;
+        *absY = temp;
+        break;
+    default:
+        break;
+    }
+}
+
 std::list<NotifyArgs> CursorInputMapper::sync(nsecs_t when, nsecs_t readTime) {
     std::list<NotifyArgs> out;
     if (!mDisplayId) {
@@ -287,12 +325,23 @@ std::list<NotifyArgs> CursorInputMapper::sync(nsecs_t when, nsecs_t readTime) {
     int32_t buttonsPressed = currentButtonState & ~lastButtonState;
     int32_t buttonsReleased = lastButtonState & ~currentButtonState;
 
-    float deltaX = mCursorMotionAccumulator.getRelativeX() * mXScale;
-    float deltaY = mCursorMotionAccumulator.getRelativeY() * mYScale;
-    bool moved = deltaX != 0 || deltaY != 0;
-
-    // Rotate delta according to orientation.
-    rotateDelta(mOrientation, &deltaX, &deltaY);
+    // BS-A16: Handle absolute axis mouse (BlueStacks) vs relative mouse
+    float deltaX = 0;
+    float deltaY = 0;
+    bool moved = false;
+    if (!mParameters.hasAbsAxis) {
+        deltaX = mCursorMotionAccumulator.getRelativeX() * mXScale;
+        deltaY = mCursorMotionAccumulator.getRelativeY() * mYScale;
+        moved = deltaX != 0 || deltaY != 0;
+        rotateDelta(mOrientation, &deltaX, &deltaY);
+    } else {
+        float absX = mCursorMotionAccumulator.getAbsoluteX() - mRawAbsXInfo.minValue;
+        float absY = mCursorMotionAccumulator.getAbsoluteY() - mRawAbsYInfo.minValue;
+        rotateAbsolute(&absX, &absY);
+        deltaX = absX * mXScale;
+        deltaY = absY * mYScale;
+        moved = mCursorMotionAccumulator.hasMoved();
+    }
 
     // Move the pointer.
     PointerProperties pointerProperties;
@@ -340,8 +389,8 @@ std::list<NotifyArgs> CursorInputMapper::sync(nsecs_t when, nsecs_t readTime) {
         moveCoords.clear();
         moveCoords.setAxisValue(AMOTION_EVENT_AXIS_RELATIVE_X, deltaX);
         moveCoords.setAxisValue(AMOTION_EVENT_AXIS_RELATIVE_Y, deltaY);
-        if (mSource != AINPUT_SOURCE_MOUSE) {
-            // Pointer capture and navigation modes
+        if (mSource != AINPUT_SOURCE_MOUSE || mParameters.hasAbsAxis) {
+            // BS-A16: For absolute mouse, report absolute coordinates via X/Y
             moveCoords.setAxisValue(AMOTION_EVENT_AXIS_X, deltaX);
             moveCoords.setAxisValue(AMOTION_EVENT_AXIS_Y, deltaY);
         }
@@ -461,6 +510,12 @@ std::optional<ui::LogicalDisplayId> CursorInputMapper::getAssociatedDisplayId() 
 }
 
 void CursorInputMapper::configureBasicParams() {
+    // BS-A16: Check if device has absolute axes (BlueStacks absolute mouse)
+    mParameters.hasAbsAxis = false;
+    if (mParameters.mode == Parameters::Mode::POINTER) {
+        mParameters.hasAbsAxis = getDeviceContext().hasAbsoluteAxis(ABS_X) &&
+                                 getDeviceContext().hasAbsoluteAxis(ABS_Y);
+    }
     mCursorScrollAccumulator.configure(getDeviceContext());
 
     // Configure basic parameters.
@@ -579,6 +634,18 @@ void CursorInputMapper::configureOnChangeDisplayInfo(const InputReaderConfigurat
                         static_cast<float>(resolvedViewport->logicalRight - 1),
                         static_cast<float>(resolvedViewport->logicalBottom - 1)}
             : FloatRect{0, 0, 0, 0};
+
+    // BS-A16: Setup scaling for absolute axis mouse (BlueStacks)
+    if (mParameters.hasAbsAxis && resolvedViewport) {
+        if (auto info = getAbsoluteAxisInfo(ABS_X)) mRawAbsXInfo = *info;
+        if (auto info = getAbsoluteAxisInfo(ABS_Y)) mRawAbsYInfo = *info;
+        mXScale = float(resolvedViewport->logicalRight - resolvedViewport->logicalLeft) /
+                  (mRawAbsXInfo.maxValue - mRawAbsXInfo.minValue + 1);
+        mYScale = float(resolvedViewport->logicalBottom - resolvedViewport->logicalTop) /
+                  (mRawAbsYInfo.maxValue - mRawAbsYInfo.minValue + 1);
+        mXPrecision = 1.0f / mXScale;
+        mYPrecision = 1.0f / mYScale;
+    }
 
     if (resolvedViewport) {
         mViewportDensityDpi = resolvedViewport->densityDpi;

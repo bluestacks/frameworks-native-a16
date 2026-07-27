@@ -2485,6 +2485,12 @@ void EventHub::openDeviceLocked(const std::string& devicePath) {
     if (device->keyBitmask.test(BTN_MOUSE) && device->relBitmask.test(REL_X) &&
         device->relBitmask.test(REL_Y)) {
         device->classes |= InputDeviceClass::CURSOR;
+    // BS-A16: Is this an absolute x-y axis with relative wheel mouse device?
+    } else if (device->keyBitmask.test(BTN_MOUSE)
+               && device->absBitmask.test(ABS_X)
+               && device->absBitmask.test(ABS_Y)
+               && device->relBitmask.test(REL_WHEEL)) {
+        device->classes |= InputDeviceClass::CURSOR;
     }
 
     // See if the device is specially configured to be of a certain type.
@@ -2512,7 +2518,7 @@ void EventHub::openDeviceLocked(const std::string& devicePath) {
         }
         // Is this an old style single-touch driver?
     } else if (device->keyBitmask.test(BTN_TOUCH) && device->absBitmask.test(ABS_X) &&
-               device->absBitmask.test(ABS_Y)) {
+               device->absBitmask.test(ABS_Y) && !device->relBitmask.test(REL_WHEEL)) {
         device->classes |= InputDeviceClass::TOUCH;
         // Is this a stylus that reports contact/pressure independently of touch coordinates?
     } else if ((device->absBitmask.test(ABS_PRESSURE) || device->keyBitmask.test(BTN_TOUCH)) &&

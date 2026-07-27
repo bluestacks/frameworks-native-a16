@@ -37,10 +37,17 @@ public:
 
     inline int32_t getRelativeX() const { return mRelX; }
     inline int32_t getRelativeY() const { return mRelY; }
+    // BS-A16: Absolute axis support for BlueStacks mouse
+    inline int32_t getAbsoluteX() const { return mAbsX; }
+    inline int32_t getAbsoluteY() const { return mAbsY; }
+    inline bool hasMoved() const { return mMoved; }
 
 private:
     int32_t mRelX;
     int32_t mRelY;
+    int32_t mAbsX; // BS-A16
+    int32_t mAbsY; // BS-A16
+    bool mMoved;   // BS-A16
 
     void clearRelativeAxes();
 };
@@ -88,6 +95,7 @@ private:
         Mode mode;
         bool hasAssociatedDisplay;
         bool orientationAware;
+        bool hasAbsAxis; // BS-A16
     } mParameters;
 
     CursorButtonAccumulator mCursorButtonAccumulator;
@@ -95,6 +103,8 @@ private:
     CursorScrollAccumulator mCursorScrollAccumulator;
 
     int32_t mSource;
+    RawAbsoluteAxisInfo mRawAbsXInfo; // BS-A16
+    RawAbsoluteAxisInfo mRawAbsYInfo; // BS-A16
     float mXScale;
     float mYScale;
     float mXPrecision;
@@ -129,6 +139,7 @@ private:
     explicit CursorInputMapper(InputDeviceContext& deviceContext,
                                const InputReaderConfiguration& readerConfig);
     void dumpParameters(std::string& dump);
+    void rotateAbsolute(float* absX, float* absY); // BS-A16
     void configureBasicParams();
     void configureOnPointerCapture(const InputReaderConfiguration& config);
     void configureOnChangePointerSpeed(const InputReaderConfiguration& config);

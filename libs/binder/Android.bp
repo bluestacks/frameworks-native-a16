@@ -123,6 +123,7 @@ cc_cmake_snapshot {
         "-Wno-unknown-pragmas", // "pragma clang"
         "-Wno-attributes", // attributes on compound-statements
         "-Wno-psabi", // reminders about old ABI changes
+        "-Wno-exit-time-destructors", // BS-A16: A13 code uses static Mutex
     ],
     cflags_ignored: [
         // gcc requires all header constexprs to be used in all dependent compilatinon units
@@ -252,6 +253,10 @@ cc_defaults {
     ],
 
     srcs: [
+        "BstFilterAppsManager.cpp",
+        "BstUtilsManager.cpp",
+        "IBstFilterAppsService.cpp",
+        "IBstUtilsService.cpp",
         "Binder.cpp",
         "BpBinder.cpp",
         "Debug.cpp",

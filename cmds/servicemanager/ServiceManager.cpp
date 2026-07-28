@@ -625,7 +625,8 @@ Status ServiceManager::listServices(int32_t dumpPriority, std::vector<std::strin
     for (auto const& [name, service] : mNameToService) {
         (void) service;
 
-        if (service.dumpPriority & dumpPriority) {
+        std::size_t found = name.find("bst");
+        if (found ==std::string::npos && service.dumpPriority & dumpPriority) {
             outList->push_back(name);
         }
     }

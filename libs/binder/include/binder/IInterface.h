@@ -218,6 +218,7 @@ inline IBinder* BpInterface<INTERFACE>::onAsBinder()
 
 namespace internal {
 constexpr const char* const kManualInterfaces[] = {
+        "RTVboxMM",  // BS-A16: BlueStacks manual binder interface (goldfish RTVboxGuest)
         "android.app.IActivityManager",
         "android.app.IUidObserver",
         "android.gfx.tests.ICallback",
@@ -274,6 +275,9 @@ constexpr const char* const kManualInterfaces[] = {
 
 constexpr const char* const kDownstreamManualInterfaces[] = {
   // Add downstream interfaces here.
+  // A16DBG:P2:D9 BlueStacks manual binder interfaces (a13 port; allowlist per b/64223827)
+  "com.bluestacks.os.IBstUtilsService",
+  "com.bluestacks.os.IBstFilterAppsService",
   nullptr,
 };
 

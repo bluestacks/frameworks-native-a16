@@ -253,6 +253,10 @@ cc_defaults {
 
     srcs: [
         "Binder.cpp",
+        "BstFilterAppsManager.cpp",
+        "BstUtilsManager.cpp",
+        "IBstFilterAppsService.cpp",
+        "IBstUtilsService.cpp",
         "BpBinder.cpp",
         "Debug.cpp",
         "FdTrigger.cpp",

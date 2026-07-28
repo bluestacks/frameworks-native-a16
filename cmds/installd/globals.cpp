@@ -30,7 +30,11 @@ namespace installd {
 
 static constexpr const char* APP_SUBDIR = "app/"; // sub-directory under ANDROID_DATA
 
+static constexpr const char* APP_DOWNLOADS_SUBDIR = "downloads/"; // sub-directory under ANDROID_DATA
+
 static constexpr const char* PRIV_APP_SUBDIR = "priv-app/"; // sub-directory under ANDROID_DATA
+
+static constexpr const char* PRIV_APP_DOWNLOADS_SUBDIR = "priv-downloads/"; // sub-directory under ANDROID_DATA
 
 static constexpr const char* EPHEMERAL_APP_SUBDIR = "app-ephemeral/"; // sub-directory under
                                                                       // ANDROID_DATA
@@ -47,9 +51,11 @@ static constexpr const char* PRIVATE_APP_SUBDIR = "app-private/"; // sub-directo
 static constexpr const char* STAGING_SUBDIR = "app-staging/"; // sub-directory under ANDROID_DATA
 
 std::string android_app_dir;
+std::string android_app_downloads_dir;
 std::string android_app_ephemeral_dir;
 std::string android_app_lib_dir;
 std::string android_app_private_dir;
+std::string android_app_private_downloads_dir;
 std::string android_asec_dir;
 std::string android_data_dir;
 std::string android_media_dir;
@@ -92,8 +98,14 @@ bool init_globals_from_data_and_root(const char* data, const char* root) {
     // Get the android app directory.
     android_app_dir = android_data_dir + APP_SUBDIR;
 
+    // Get the BlueStacks app directory.
+    android_app_downloads_dir = android_data_dir + APP_DOWNLOADS_SUBDIR;
+
     // Get the android protected app directory.
     android_app_private_dir = android_data_dir + PRIVATE_APP_SUBDIR;
+
+    // Get the BlueStacks protected app directory.
+    android_app_private_downloads_dir = android_data_dir + PRIV_APP_DOWNLOADS_SUBDIR;
 
     // Get the android ephemeral app directory.
     android_app_ephemeral_dir = android_data_dir + EPHEMERAL_APP_SUBDIR;
@@ -122,6 +134,8 @@ bool init_globals_from_data_and_root(const char* data, const char* root) {
     android_system_dirs.push_back(android_root_dir + PRIV_APP_SUBDIR);
     android_system_dirs.push_back("/vendor/app/");
     android_system_dirs.push_back("/oem/app/");
+    android_system_dirs.push_back("/data/downloads/");
+    android_system_dirs.push_back("/data/priv-downloads/");
 
     return true;
 }

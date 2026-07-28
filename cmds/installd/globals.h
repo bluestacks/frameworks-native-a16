@@ -29,9 +29,11 @@ namespace installd {
 static constexpr const char* ASEC_MOUNTPOINT_ENV_NAME = "ASEC_MOUNTPOINT";
 
 extern std::string android_app_dir;
+extern std::string android_app_downloads_dir;
 extern std::string android_app_ephemeral_dir;
 extern std::string android_app_lib_dir;
 extern std::string android_app_private_dir;
+extern std::string android_app_private_downloads_dir;
 extern std::string android_asec_dir;
 extern std::string android_data_dir;
 extern std::string android_media_dir;

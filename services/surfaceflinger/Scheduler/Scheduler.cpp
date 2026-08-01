@@ -868,14 +868,6 @@ void Scheduler::resyncToHardwareVsyncLocked(PhysicalDisplayId id, bool allowToEn
         if (modePtr->getVsyncRate().isValid()) {
             constexpr bool kForce = false;
             display.schedulePtr->onDisplayModeChanged(ftl::as_non_null(modePtr), kForce);
-
-            const int bstFps = android::base::GetIntProperty<int>("bst.max_fps", 0);
-            if (bstFps > 0 && bstFps <= 240) {
-                const Fps overrideRate = Fps::fromValue(static_cast<float>(bstFps));
-                if (overrideRate.isValid()) {
-                    updatePhaseConfiguration(id, overrideRate);
-                }
-            }
         }
     }
 }

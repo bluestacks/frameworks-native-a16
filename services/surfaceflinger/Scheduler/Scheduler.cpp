@@ -872,8 +872,15 @@ void Scheduler::resyncToHardwareVsyncLocked(PhysicalDisplayId id, bool allowToEn
             const int bstFps = android::base::GetIntProperty<int>("bst.max_fps", 0);
             if (bstFps > 0 && bstFps <= 240) {
                 const Fps overrideRate = Fps::fromValue(static_cast<float>(bstFps));
-                if (overrideRate.isValid()) {
-                    updatePhaseConfiguration(id, overrideRate);
+                if (overrideRate.isValid() && id == mPacesetterDisplayId) {
+                    mRefreshRateStats->setRefreshRate(overrideRate);
+                    const auto currentConfigs = [=, this] {
+                        std::scoped_lock lock{mVsyncConfigLock};
+                        mVsyncConfiguration->setRefreshRateFps(overrideRate);
+                        return mVsyncConfiguration->getCurrentConfigs();
+                    }();
+                    setVsyncConfig(mVsyncModulator->setVsyncConfigSet(currentConfigs),
+                                   overrideRate.getPeriod());
                 }
             }
         }

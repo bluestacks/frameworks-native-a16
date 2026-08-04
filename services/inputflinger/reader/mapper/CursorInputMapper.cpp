@@ -20,6 +20,7 @@
 
 #include "CursorInputMapper.h"
 
+#include <algorithm>
 #include <optional>
 
 #include <com_android_input_flags.h>
@@ -71,6 +72,11 @@ CursorMotionAccumulator::CursorMotionAccumulator() {
 
 void CursorMotionAccumulator::reset(InputDeviceContext& deviceContext) {
     clearRelativeAxes();
+    const auto absXInfo = deviceContext.getAbsoluteAxisInfo(ABS_X);
+    const auto absYInfo = deviceContext.getAbsoluteAxisInfo(ABS_Y);
+    mAbsX = absXInfo ? absXInfo->minValue : 0;
+    mAbsY = absYInfo ? absYInfo->minValue : 0;
+    mMoved = false;
 }
 
 void CursorMotionAccumulator::clearRelativeAxes() {
@@ -83,15 +89,29 @@ void CursorMotionAccumulator::process(const RawEvent& rawEvent) {
         switch (rawEvent.code) {
             case REL_X:
                 mRelX = rawEvent.value;
+                mMoved = true;
                 break;
             case REL_Y:
                 mRelY = rawEvent.value;
+                mMoved = true;
+                break;
+        }
+    } else if (rawEvent.type == EV_ABS) {
+        switch (rawEvent.code) {
+            case ABS_X:
+                mAbsX = rawEvent.value;
+                mMoved = true;
+                break;
+            case ABS_Y:
+                mAbsY = rawEvent.value;
+                mMoved = true;
                 break;
         }
     }
 }
 
 void CursorMotionAccumulator::finishSync() {
+    mMoved = false;
     clearRelativeAxes();
 }
 
@@ -211,6 +231,8 @@ CursorInputMapper::Parameters CursorInputMapper::computeParameters(
     }
 
     parameters.orientationAware = config.getBool("cursor.orientationAware").value_or(false);
+    parameters.hasAbsoluteAxes = parameters.mode == Parameters::Mode::POINTER &&
+            deviceContext.hasAbsoluteAxis(ABS_X) && deviceContext.hasAbsoluteAxis(ABS_Y);
 
     parameters.hasAssociatedDisplay = false;
     if (parameters.mode == Parameters::Mode::POINTER || parameters.orientationAware) {
@@ -225,6 +247,8 @@ void CursorInputMapper::dumpParameters(std::string& dump) {
                          toString(mParameters.hasAssociatedDisplay));
     dump += StringPrintf(INDENT4 "Mode: %s\n", ftl::enum_string(mParameters.mode).c_str());
     dump += StringPrintf(INDENT4 "OrientationAware: %s\n", toString(mParameters.orientationAware));
+    dump += StringPrintf(INDENT4 "HasAbsoluteAxes: %s\n",
+                         toString(mParameters.hasAbsoluteAxes));
 }
 
 std::list<NotifyArgs> CursorInputMapper::reset(nsecs_t when) {
@@ -287,12 +311,38 @@ std::list<NotifyArgs> CursorInputMapper::sync(nsecs_t when, nsecs_t readTime) {
     int32_t buttonsPressed = currentButtonState & ~lastButtonState;
     int32_t buttonsReleased = lastButtonState & ~currentButtonState;
 
-    float deltaX = mCursorMotionAccumulator.getRelativeX() * mXScale;
-    float deltaY = mCursorMotionAccumulator.getRelativeY() * mYScale;
-    bool moved = deltaX != 0 || deltaY != 0;
+    float deltaX = 0;
+    float deltaY = 0;
+    float xCursorPosition = AMOTION_EVENT_INVALID_CURSOR_POSITION;
+    float yCursorPosition = AMOTION_EVENT_INVALID_CURSOR_POSITION;
+    bool moved = false;
+    const bool useAbsoluteAxes = mParameters.hasAbsoluteAxes &&
+            mParameters.mode == Parameters::Mode::POINTER && mRawAbsXInfo && mRawAbsYInfo;
 
-    // Rotate delta according to orientation.
-    rotateDelta(mOrientation, &deltaX, &deltaY);
+    if (useAbsoluteAxes) {
+        const float rawWidth = mRawAbsXInfo->maxValue - mRawAbsXInfo->minValue;
+        const float rawHeight = mRawAbsYInfo->maxValue - mRawAbsYInfo->minValue;
+        float normalizedX = rawWidth > 0
+                ? (mCursorMotionAccumulator.getAbsoluteX() - mRawAbsXInfo->minValue) / rawWidth
+                : 0;
+        float normalizedY = rawHeight > 0
+                ? (mCursorMotionAccumulator.getAbsoluteY() - mRawAbsYInfo->minValue) / rawHeight
+                : 0;
+        normalizedX = std::clamp(normalizedX, 0.0f, 1.0f);
+        normalizedY = std::clamp(normalizedY, 0.0f, 1.0f);
+        rotateAbsolute(mOrientation, &normalizedX, &normalizedY);
+        xCursorPosition = mBoundsInLogicalDisplay.left +
+                normalizedX * (mBoundsInLogicalDisplay.right - mBoundsInLogicalDisplay.left);
+        yCursorPosition = mBoundsInLogicalDisplay.top +
+                normalizedY * (mBoundsInLogicalDisplay.bottom - mBoundsInLogicalDisplay.top);
+        moved = mCursorMotionAccumulator.hasMoved();
+    } else {
+        deltaX = mCursorMotionAccumulator.getRelativeX() * mXScale;
+        deltaY = mCursorMotionAccumulator.getRelativeY() * mYScale;
+        moved = deltaX != 0 || deltaY != 0;
+        rotateDelta(mOrientation, &deltaX, &deltaY);
+        mPointerVelocityControl.move(when, &deltaX, &deltaY);
+    }
 
     // Move the pointer.
     PointerProperties pointerProperties;
@@ -311,11 +361,6 @@ std::list<NotifyArgs> CursorInputMapper::sync(nsecs_t when, nsecs_t readTime) {
 
     mWheelYVelocityControl.move(when, nullptr, &vscroll);
     mWheelXVelocityControl.move(when, &hscroll, nullptr);
-
-    mPointerVelocityControl.move(when, &deltaX, &deltaY);
-
-    float xCursorPosition = AMOTION_EVENT_INVALID_CURSOR_POSITION;
-    float yCursorPosition = AMOTION_EVENT_INVALID_CURSOR_POSITION;
 
     // Moving an external trackball or mouse should wake the device.
     // We don't do this for internal cursor devices to prevent them from waking up
@@ -338,9 +383,14 @@ std::list<NotifyArgs> CursorInputMapper::sync(nsecs_t when, nsecs_t readTime) {
 
         PointerCoords moveCoords;
         moveCoords.clear();
-        moveCoords.setAxisValue(AMOTION_EVENT_AXIS_RELATIVE_X, deltaX);
-        moveCoords.setAxisValue(AMOTION_EVENT_AXIS_RELATIVE_Y, deltaY);
-        if (mSource != AINPUT_SOURCE_MOUSE) {
+        if (useAbsoluteAxes) {
+            moveCoords.setAxisValue(AMOTION_EVENT_AXIS_X, xCursorPosition);
+            moveCoords.setAxisValue(AMOTION_EVENT_AXIS_Y, yCursorPosition);
+        } else {
+            moveCoords.setAxisValue(AMOTION_EVENT_AXIS_RELATIVE_X, deltaX);
+            moveCoords.setAxisValue(AMOTION_EVENT_AXIS_RELATIVE_Y, deltaY);
+        }
+        if (!useAbsoluteAxes && mSource != AINPUT_SOURCE_MOUSE) {
             // Pointer capture and navigation modes
             moveCoords.setAxisValue(AMOTION_EVENT_AXIS_X, deltaX);
             moveCoords.setAxisValue(AMOTION_EVENT_AXIS_Y, deltaY);
@@ -367,6 +417,10 @@ std::list<NotifyArgs> CursorInputMapper::sync(nsecs_t when, nsecs_t readTime) {
 
         PointerCoords pointerCoords;
         pointerCoords.clear();
+        if (useAbsoluteAxes) {
+            pointerCoords.setAxisValue(AMOTION_EVENT_AXIS_X, xCursorPosition);
+            pointerCoords.setAxisValue(AMOTION_EVENT_AXIS_Y, yCursorPosition);
+        }
         pointerCoords.setAxisValue(AMOTION_EVENT_AXIS_PRESSURE, down ? 1.0f : 0.0f);
 
         if (buttonsReleased) {
@@ -475,6 +529,14 @@ void CursorInputMapper::configureBasicParams() {
             [[fallthrough]];
         case Parameters::Mode::POINTER:
             mSource = AINPUT_SOURCE_MOUSE;
+            if (mParameters.hasAbsoluteAxes) {
+                mRawAbsXInfo = getAbsoluteAxisInfo(ABS_X);
+                mRawAbsYInfo = getAbsoluteAxisInfo(ABS_Y);
+                if (!mRawAbsXInfo || !mRawAbsYInfo) {
+                    ALOGW("Absolute cursor axes disappeared during configuration");
+                    mParameters.hasAbsoluteAxes = false;
+                }
+            }
             mXPrecision = 1.0f;
             mYPrecision = 1.0f;
             mXScale = 1.0f;
@@ -491,6 +553,27 @@ void CursorInputMapper::configureBasicParams() {
 
     mVWheelScale = 1.0f;
     mHWheelScale = 1.0f;
+}
+
+void CursorInputMapper::rotateAbsolute(ui::Rotation orientation, float* x, float* y) {
+    const float oldX = *x;
+    const float oldY = *y;
+    switch (orientation) {
+        case ui::Rotation::Rotation90:
+            *x = oldY;
+            *y = 1.0f - oldX;
+            break;
+        case ui::Rotation::Rotation180:
+            *x = 1.0f - oldX;
+            *y = 1.0f - oldY;
+            break;
+        case ui::Rotation::Rotation270:
+            *x = 1.0f - oldY;
+            *y = oldX;
+            break;
+        case ui::Rotation::Rotation0:
+            break;
+    }
 }
 
 void CursorInputMapper::configureOnPointerCapture(const InputReaderConfiguration& config) {

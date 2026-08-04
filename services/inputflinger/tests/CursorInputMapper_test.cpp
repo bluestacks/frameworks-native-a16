@@ -169,6 +169,10 @@ protected:
                 .WillRepeatedly(Return(false));
         EXPECT_CALL(mMockEventHub, hasRelativeAxis(EVENTHUB_ID, REL_HWHEEL_HI_RES))
                 .WillRepeatedly(Return(false));
+        EXPECT_CALL(mMockEventHub, getAbsoluteAxisInfo(EVENTHUB_ID, ABS_X))
+                .WillRepeatedly(Return(std::nullopt));
+        EXPECT_CALL(mMockEventHub, getAbsoluteAxisInfo(EVENTHUB_ID, ABS_Y))
+                .WillRepeatedly(Return(std::nullopt));
 
         mFakePolicy->setDefaultPointerDisplayId(DISPLAY_ID);
         mFakePolicy->addDisplayViewport(createPrimaryViewport(ui::Rotation::Rotation0));
@@ -220,6 +224,22 @@ TEST_F(CursorInputMapperUnitTest, GetSourcesReturnsMouseInPointerMode) {
     createMapper();
 
     ASSERT_EQ(AINPUT_SOURCE_MOUSE, mMapper->getSources());
+}
+
+TEST_F(CursorInputMapperUnitTest, ProcessAbsoluteMouseCoordinates) {
+    setupAxis(ABS_X, true, 0, DISPLAY_WIDTH - 1, /*resolution=*/1);
+    setupAxis(ABS_Y, true, 0, DISPLAY_HEIGHT - 1, /*resolution=*/1);
+    createMapper();
+
+    std::list<NotifyArgs> args;
+    args += process(ARBITRARY_TIME, EV_ABS, ABS_X, 120);
+    args += process(ARBITRARY_TIME, EV_ABS, ABS_Y, 300);
+    args += process(ARBITRARY_TIME, EV_SYN, SYN_REPORT, 0);
+
+    ASSERT_THAT(args,
+                ElementsAre(VariantWith<NotifyMotionArgs>(
+                        AllOf(WithMotionAction(HOVER_MOVE), WithCoords(120.0f, 300.0f),
+                              WithCursorPosition(120.0f, 300.0f)))));
 }
 
 TEST_F(CursorInputMapperUnitTest, GetSourcesReturnsTrackballInNavigationMode) {

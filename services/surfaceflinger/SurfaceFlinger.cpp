@@ -2523,8 +2523,12 @@ void SurfaceFlinger::onComposerHalSeamlessPossible(hal::HWDisplayId) {
     // use this callback to know when to retry in case of SEAMLESS_NOT_POSSIBLE.
 }
 
-void SurfaceFlinger::onComposerHalRefresh(hal::HWDisplayId) {
+void SurfaceFlinger::onComposerHalRefresh(hal::HWDisplayId hwcDisplayId) {
     Mutex::Autolock lock(mStateLock);
+    if (const auto displayId = getHwComposer().toPhysicalDisplayId(hwcDisplayId)) {
+        constexpr bool kAllowToEnable = false;
+        mScheduler->resyncToHardwareVsync(*displayId, kAllowToEnable);
+    }
     scheduleComposite(FrameHint::kNone);
 }
 

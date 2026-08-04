@@ -1080,11 +1080,11 @@ static void DoRadioLogcat() {
 static void DoLogcat() {
     unsigned long timeout_ms;
     // DumpFile("EVENT LOG TAGS", "/etc/event-log-tags");
-    // calculate timeout
-    timeout_ms = logcat_timeout({"main", "system", "crash"});
+    // Keep the App Player system-log collection bounded to 60 seconds.
+    constexpr unsigned long kSystemLogTimeoutMs = 60 * 1000;
     RunCommand("SYSTEM LOG",
                {"logcat", "-v", "threadtime", "-v", "printable", "-v", "uid", "-d", "*:v"},
-               CommandOptions::WithTimeoutInMs(timeout_ms).Build());
+               CommandOptions::WithTimeoutInMs(kSystemLogTimeoutMs).Build());
     timeout_ms = logcat_timeout({"events"});
     RunCommand(
         "EVENT LOG",
@@ -1186,14 +1186,19 @@ static void DumpVisibleWindowViews() {
 }
 
 static void DumpIpTablesAsRoot() {
-    RunCommand("IPTABLES", {"iptables", "-L", "-nvx"});
-    RunCommand("IP6TABLES", {"ip6tables", "-L", "-nvx"});
-    RunCommand("IPTABLES NAT", {"iptables", "-t", "nat", "-L", "-nvx"});
+    RunCommand("IPTABLES", {"iptables", "-L", "-nvx"}, CommandOptions::AS_ROOT);
+    RunCommand("IP6TABLES", {"ip6tables", "-L", "-nvx"}, CommandOptions::AS_ROOT);
+    RunCommand("IPTABLES NAT", {"iptables", "-t", "nat", "-L", "-nvx"},
+               CommandOptions::AS_ROOT);
     /* no ip6 nat */
-    RunCommand("IPTABLES MANGLE", {"iptables", "-t", "mangle", "-L", "-nvx"});
-    RunCommand("IP6TABLES MANGLE", {"ip6tables", "-t", "mangle", "-L", "-nvx"});
-    RunCommand("IPTABLES RAW", {"iptables", "-t", "raw", "-L", "-nvx"});
-    RunCommand("IP6TABLES RAW", {"ip6tables", "-t", "raw", "-L", "-nvx"});
+    RunCommand("IPTABLES MANGLE", {"iptables", "-t", "mangle", "-L", "-nvx"},
+               CommandOptions::AS_ROOT);
+    RunCommand("IP6TABLES MANGLE", {"ip6tables", "-t", "mangle", "-L", "-nvx"},
+               CommandOptions::AS_ROOT);
+    RunCommand("IPTABLES RAW", {"iptables", "-t", "raw", "-L", "-nvx"},
+               CommandOptions::AS_ROOT);
+    RunCommand("IP6TABLES RAW", {"ip6tables", "-t", "raw", "-L", "-nvx"},
+               CommandOptions::AS_ROOT);
 }
 
 static void DumpShutdownCheckpoints() {
@@ -1929,6 +1934,29 @@ Dumpstate::RunStatus Dumpstate::dumpstate() {
     }
 
     RUN_SLOW_FUNCTION_WITH_CONSENT_CHECK(DumpAppInfos);
+
+    const CommandOptions app_player_options =
+            CommandOptions::WithTimeout(30).AsRoot().Build();
+    RunCommand("SYSTEM FILESYSTEM FILE LIST",
+               {"sh", "-c", "ls -a -l -R /system | grep -v bstk | grep -v -w su"},
+               app_player_options);
+    RunCommand("DATA FILESYSTEM FILE LIST",
+               {"sh", "-c", "ls -a -l -R /data | grep -v bstk | grep -v -w su"},
+               app_player_options);
+    RunCommand("SDCARD FILESYSTEM FILE LIST", {"ls", "-a", "-l", "-R", "/storage/sdcard"},
+               app_player_options);
+    RunCommand("INPUT MANAGER STATE", {"cat", "/data/system/input-manager-state.xml"},
+               app_player_options);
+    RunCommand("NSLOOKUP OUTPUT", {"nslookup", "www.google.com"}, app_player_options);
+    RunCommand("SCREENCAP OUTPUT", {"screencap", "-p", "/data/anr/problemreport.png"},
+               app_player_options);
+    RunCommand("", {"chmod", "644", "/data/anr/problemreport.png"}, app_player_options);
+    RunCommand("PACKAGES INFO", {"cat", "/data/system/packages.xml"}, app_player_options);
+    RunCommand("UID ERRORS", {"cat", "/data/system/uiderrors.txt"}, app_player_options);
+    RunCommand("CORRUPT FILES", {"cat", "/data/local/tmp/corrupt_files"},
+               app_player_options);
+    RunCommand("CORRUPT FILES DELETED", {"cat", "/data/local/tmp/corrupt_files_deleted"},
+               app_player_options);
 
     printf("========================================================\n");
     printf("== Dropbox crashes\n");

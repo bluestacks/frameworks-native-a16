@@ -211,10 +211,8 @@ int PropertiesHelper::parallel_run_ = -1;
 int PropertiesHelper::strict_run_ = -1;
 
 bool PropertiesHelper::IsUserBuild() {
-    if (build_type_.empty()) {
-        build_type_ = android::base::GetProperty("ro.build.type", "user");
-    }
-    return "user" == build_type_;
+    // App Player uses its managed su wrapper for privileged diagnostics on every build type.
+    return false;
 }
 
 bool PropertiesHelper::IsDryRun() {

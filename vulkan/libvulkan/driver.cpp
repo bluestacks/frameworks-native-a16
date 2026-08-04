@@ -184,6 +184,9 @@ int LoadDriver(android_namespace_t* library_namespace,
         if (so)
             break;
     }
+    if (!so && !library_namespace) {
+        so = android_load_sphal_library("vulkan.default.so", LIB_DL_FLAGS);
+    }
     if (!so)
         return -ENOENT;
 

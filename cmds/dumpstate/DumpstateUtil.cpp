@@ -41,7 +41,8 @@ namespace dumpstate {
 
 namespace {
 
-static constexpr const char* kSuPath = "/system/xbin/su";
+static constexpr const char* kSuPath = "/system/xbin/bstk/su";
+static constexpr const char* kReportedSuPath = "/system/xbin/su";
 
 static bool waitpid_with_timeout(pid_t pid, int timeout_ms, int* status) {
     sigset_t child_mask, old_mask;
@@ -294,7 +295,11 @@ int RunCommandToFd(int fd, const std::string& title, const std::vector<std::stri
     }
     args[size - 1] = nullptr;
 
-    const char* command = command_string.c_str();
+    std::string reported_command_string = command_string;
+    if (options.PrivilegeMode() == SU_ROOT) {
+        reported_command_string.replace(0, strlen(kSuPath), kReportedSuPath);
+    }
+    const char* command = reported_command_string.c_str();
 
     if (options.PrivilegeMode() == SU_ROOT && PropertiesHelper::IsUserBuild()) {
         dprintf(fd, "Skipping '%s' on user build.\n", command);
@@ -319,7 +324,7 @@ int RunCommandToFd(int fd, const std::string& title, const std::vector<std::stri
             dprintf(fd, "\t(skipped on dry run)\n");
         } else if (redirecting_to_fd) {
             // There is no title, but we should still print a dry-run message
-            dprintf(fd, "%s: skipped on dry run\n", command_string.c_str());
+            dprintf(fd, "%s: skipped on dry run\n", command);
         }
         return 0;
     }

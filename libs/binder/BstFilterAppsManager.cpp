@@ -4,14 +4,269 @@
 #include <binder/Binder.h>
 #include <binder/IServiceManager.h>
 
+#include <cutils/multiuser.h>
+#include <private/android_filesystem_config.h>
+
 #include <utils/Log.h>
+#include <utils/String8.h>
 #include <utils/SystemClock.h>
+
+#include <dlfcn.h>
+#include <mutex>
+#include <string>
+#include <unistd.h>
 
 #ifndef __ANDROID_VNDK__  // A16DBG:P2:D9 PermissionController not visible to vendor variant
 #include <binder/PermissionController.h>
 #endif
 
+struct AIBinder;
+struct AIBinder_Class;
+struct AParcel;
+
 namespace android {
+
+namespace {
+
+constexpr char kBstFilterAppsServiceName[] = "bstfilterapps";
+constexpr char kBstFilterAppsDescriptor[] = "com.bluestacks.os.IBstFilterAppsService";
+constexpr int32_t kStatusOk = 0;
+constexpr int32_t kStatusUnknownTransaction = -32;
+
+using BinderStatus = int32_t;
+using TransactionCode = uint32_t;
+using StringAllocator = bool (*)(void*, int32_t, char**);
+using ClassOnCreate = void* (*)(void*);
+using ClassOnDestroy = void (*)(void*);
+using ClassOnTransact = BinderStatus (*)(AIBinder*, TransactionCode, const AParcel*, AParcel*);
+
+void* unusedClassCreate(void*) {
+    return nullptr;
+}
+
+void unusedClassDestroy(void*) {}
+
+BinderStatus unusedClassTransact(AIBinder*, TransactionCode, const AParcel*, AParcel*) {
+    return kStatusUnknownTransaction;
+}
+
+struct NdkBinderApi {
+    void* handle = nullptr;
+    AIBinder* (*checkService)(const char*) = nullptr;
+    AIBinder_Class* (*defineClass)(const char*, ClassOnCreate, ClassOnDestroy, ClassOnTransact) =
+            nullptr;
+    bool (*associateClass)(AIBinder*, const AIBinder_Class*) = nullptr;
+    BinderStatus (*prepareTransaction)(AIBinder*, AParcel**) = nullptr;
+    BinderStatus (*transact)(AIBinder*, TransactionCode, AParcel**, AParcel**, uint32_t) = nullptr;
+    BinderStatus (*writeString)(AParcel*, const char*, int32_t) = nullptr;
+    BinderStatus (*readInt32)(const AParcel*, int32_t*) = nullptr;
+    BinderStatus (*readString)(const AParcel*, void*, StringAllocator) = nullptr;
+    void (*deleteParcel)(AParcel*) = nullptr;
+    void (*incStrong)(AIBinder*) = nullptr;
+    void (*decStrong)(AIBinder*) = nullptr;
+    bool (*isAlive)(AIBinder*) = nullptr;
+    AIBinder_Class* clazz = nullptr;
+
+    bool complete() const {
+        return handle != nullptr && checkService != nullptr && defineClass != nullptr &&
+                associateClass != nullptr && prepareTransaction != nullptr && transact != nullptr &&
+                writeString != nullptr && readInt32 != nullptr && readString != nullptr &&
+                deleteParcel != nullptr && incStrong != nullptr && decStrong != nullptr &&
+                isAlive != nullptr && clazz != nullptr;
+    }
+};
+
+const NdkBinderApi& getNdkBinderApi() {
+    [[clang::no_destroy]] static const NdkBinderApi api = []() {
+        NdkBinderApi loaded;
+        loaded.handle = dlopen("libbinder_ndk.so", RTLD_NOW | RTLD_LOCAL);
+        if (loaded.handle == nullptr) {
+            return loaded;
+        }
+        loaded.checkService = reinterpret_cast<decltype(loaded.checkService)>(
+                dlsym(loaded.handle, "AServiceManager_checkService"));
+        loaded.defineClass = reinterpret_cast<decltype(loaded.defineClass)>(
+                dlsym(loaded.handle, "AIBinder_Class_define"));
+        loaded.associateClass = reinterpret_cast<decltype(loaded.associateClass)>(
+                dlsym(loaded.handle, "AIBinder_associateClass"));
+        loaded.prepareTransaction = reinterpret_cast<decltype(loaded.prepareTransaction)>(
+                dlsym(loaded.handle, "AIBinder_prepareTransaction"));
+        loaded.transact = reinterpret_cast<decltype(loaded.transact)>(
+                dlsym(loaded.handle, "AIBinder_transact"));
+        loaded.writeString = reinterpret_cast<decltype(loaded.writeString)>(
+                dlsym(loaded.handle, "AParcel_writeString"));
+        loaded.readInt32 = reinterpret_cast<decltype(loaded.readInt32)>(
+                dlsym(loaded.handle, "AParcel_readInt32"));
+        loaded.readString = reinterpret_cast<decltype(loaded.readString)>(
+                dlsym(loaded.handle, "AParcel_readString"));
+        loaded.deleteParcel = reinterpret_cast<decltype(loaded.deleteParcel)>(
+                dlsym(loaded.handle, "AParcel_delete"));
+        loaded.incStrong = reinterpret_cast<decltype(loaded.incStrong)>(
+                dlsym(loaded.handle, "AIBinder_incStrong"));
+        loaded.decStrong = reinterpret_cast<decltype(loaded.decStrong)>(
+                dlsym(loaded.handle, "AIBinder_decStrong"));
+        loaded.isAlive = reinterpret_cast<decltype(loaded.isAlive)>(
+                dlsym(loaded.handle, "AIBinder_isAlive"));
+        if (loaded.defineClass != nullptr) {
+            loaded.clazz = loaded.defineClass(kBstFilterAppsDescriptor, unusedClassCreate,
+                                              unusedClassDestroy, unusedClassTransact);
+        }
+        return loaded;
+    }();
+    return api;
+}
+
+bool isAppPolicyClient() {
+    const uid_t uid = getuid();
+    const uid_t appId = multiuser_get_app_id(uid);
+    return appId >= AID_APP_START && appId <= AID_APP_END;
+}
+
+struct BinderCache {
+    std::mutex lock;
+    AIBinder* binder = nullptr;
+};
+
+AIBinder* acquireSystemBstFilterService() {
+    const NdkBinderApi& api = getNdkBinderApi();
+    if (!api.complete()) {
+        static std::once_flag logOnce;
+        std::call_once(logOnce, []() {
+            ALOGE("A16DBG:BSTFILTER: public NDK Binder API unavailable");
+        });
+        return nullptr;
+    }
+
+    [[clang::no_destroy]] static BinderCache cache;
+    std::lock_guard<std::mutex> guard(cache.lock);
+    if (cache.binder != nullptr && !api.isAlive(cache.binder)) {
+        api.decStrong(cache.binder);
+        cache.binder = nullptr;
+    }
+    if (cache.binder == nullptr) {
+        cache.binder = api.checkService(kBstFilterAppsServiceName);
+        if (cache.binder == nullptr) {
+            return nullptr;
+        }
+        if (!api.associateClass(cache.binder, api.clazz)) {
+            api.decStrong(cache.binder);
+            cache.binder = nullptr;
+            return nullptr;
+        }
+    }
+    api.incStrong(cache.binder);
+    return cache.binder;
+}
+
+AParcel* transactGraphicsPolicy(uint32_t transactionOffset, const String16& packageName) {
+    if (!isAppPolicyClient()) {
+        return nullptr;
+    }
+
+    const NdkBinderApi& api = getNdkBinderApi();
+    AIBinder* binder = acquireSystemBstFilterService();
+    if (binder == nullptr) {
+        return nullptr;
+    }
+
+    AParcel* input = nullptr;
+    AParcel* output = nullptr;
+    BinderStatus status = api.prepareTransaction(binder, &input);
+    if (status == kStatusOk) {
+        const String8 packageUtf8(packageName);
+        status = api.writeString(input, packageUtf8.c_str(),
+                                 static_cast<int32_t>(packageUtf8.size()));
+    }
+    if (status == kStatusOk) {
+        status = api.transact(binder, transactionOffset + 1, &input, &output, 0);
+    }
+    api.decStrong(binder);
+    if (input != nullptr) {
+        api.deleteParcel(input);
+    }
+    if (status != kStatusOk || output == nullptr) {
+        if (output != nullptr) {
+            api.deleteParcel(output);
+        }
+        return nullptr;
+    }
+
+    int32_t exceptionCode = -1;
+    status = api.readInt32(output, &exceptionCode);
+    if (status != kStatusOk || exceptionCode != 0) {
+        api.deleteParcel(output);
+        return nullptr;
+    }
+
+    static std::once_flag successLogOnce;
+    std::call_once(successLogOnce, []() {
+        ALOGI("A16DBG:BSTFILTER: direct system Binder graphics policy enabled");
+    });
+    return output;
+}
+
+bool allocateString(void* stringData, int32_t length, char** buffer) {
+    auto* value = static_cast<std::string*>(stringData);
+    if (length < 0) {
+        value->clear();
+        *buffer = nullptr;
+        return true;
+    }
+    value->resize(static_cast<size_t>(length));
+    *buffer = value->data();
+    return true;
+}
+
+} // namespace
+
+namespace bst_graphics_policy {
+
+LIBBINDER_EXPORTED bool queryBool(uint32_t transactionOffset, const String16& packageName,
+                                  bool fallback) {
+    AParcel* output = transactGraphicsPolicy(transactionOffset, packageName);
+    if (output == nullptr) {
+        return fallback;
+    }
+    const NdkBinderApi& api = getNdkBinderApi();
+    int32_t value = fallback ? 1 : 0;
+    const BinderStatus status = api.readInt32(output, &value);
+    api.deleteParcel(output);
+    return status == kStatusOk ? value != 0 : fallback;
+}
+
+LIBBINDER_EXPORTED int32_t queryInt(uint32_t transactionOffset, const String16& packageName,
+                                    int32_t fallback) {
+    AParcel* output = transactGraphicsPolicy(transactionOffset, packageName);
+    if (output == nullptr) {
+        return fallback;
+    }
+    const NdkBinderApi& api = getNdkBinderApi();
+    int32_t value = fallback;
+    const BinderStatus status = api.readInt32(output, &value);
+    api.deleteParcel(output);
+    return status == kStatusOk ? value : fallback;
+}
+
+LIBBINDER_EXPORTED String8 queryString(uint32_t transactionOffset, const String16& packageName,
+                                       const String8& fallback) {
+    AParcel* output = transactGraphicsPolicy(transactionOffset, packageName);
+    if (output == nullptr) {
+        return fallback;
+    }
+    const NdkBinderApi& api = getNdkBinderApi();
+    std::string value;
+    const BinderStatus status = api.readString(output, &value, allocateString);
+    api.deleteParcel(output);
+    if (status != kStatusOk) {
+        return fallback;
+    }
+    if (!value.empty() && value.back() == '\0') {
+        value.pop_back();
+    }
+    return String8(value.c_str());
+}
+
+} // namespace bst_graphics_policy
 
     BstFilterAppsManager::BstFilterAppsManager()
     {

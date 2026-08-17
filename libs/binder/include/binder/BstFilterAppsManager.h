@@ -1,54 +1,201 @@
 #pragma once
 
 #ifdef BST_ANDROID16_GUEST
-// Goldfish vendor modules cannot query the system bstfilterapps Binder service.
+#include <binder/Common.h>
 #include <utils/String16.h>
 #include <utils/String8.h>
 
 namespace android {
+namespace bst_graphics_policy {
+
+// Offsets are kept in sync with IBstFilterAppsService's AIDL transaction order.
+LIBBINDER_EXPORTED bool queryBool(uint32_t transactionOffset, const String16& packageName,
+                                  bool fallback);
+LIBBINDER_EXPORTED int32_t queryInt(uint32_t transactionOffset, const String16& packageName,
+                                    int32_t fallback);
+LIBBINDER_EXPORTED String8 queryString(uint32_t transactionOffset, const String16& packageName,
+                                       const String8& fallback);
+
+enum TransactionOffset : uint32_t {
+    kPvrtc = 12,
+    kS3tc = 14,
+    kGlRenderer = 19,
+    kGlVendor = 20,
+    kAgaGl3Disabled = 26,
+    kAstc = 29,
+    kAgaGlVersion = 32,
+    kAdditionalGlExtensions = 54,
+    kImageDetection = 60,
+    kUe4GlFlush = 74,
+    kVulkanRequired = 78,
+    kHppEnabled = 82,
+    kInvalidateFramebuffer = 84,
+    kUnityFlickerPatch = 85,
+    kIntelDispatchFlush = 88,
+    kGlNativeSyncDisabled = 91,
+    kAngleDisabled = 92,
+    kGlProgramBinary = 95,
+    kGlUnmapBufferPerf = 96,
+    kGlShaderWorkaround = 97,
+    kTexTargetCheckDisabled = 99,
+    kGlMapBufferRangeHost = 102,
+    kIgnoreSyncTimeout = 103,
+    kGlVboCacheDisabled = 104,
+    kGlHostInfo = 106,
+    kGlExtensionsIgnore = 107,
+    kIntelAutoGlFlush = 110,
+    kUnreal5 = 112,
+    kUe5PbDisabled = 113,
+    kBptc = 114,
+    kVkHostInfo = 117,
+    kVkDeviceExtIgnore = 118,
+    kMapBufRangeReadOnce = 121,
+    kFbCompleteCheckDisabled = 122,
+};
+
+} // namespace bst_graphics_policy
+
 class BstFilterAppsManager {
 public:
     BstFilterAppsManager() = default;
-    bool isAGAGL3Disabled(const String16&) { return false; }
+
+    bool isAGAGL3Disabled(const String16& packageName) {
+        return bst_graphics_policy::queryBool(bst_graphics_policy::kAgaGl3Disabled, packageName,
+                                              false);
+    }
     bool isAppBlockedInFGForGL3(const String16&) { return false; }
-    bool isASTCApp(const String16&) { return false; }
-    bool isAstcApp(const String16&) { return false; }
-    bool isS3tcApp(const String16&) { return false; }
-    bool isBptcApp(const String16&) { return false; }
-    bool isPvrtcApp(const String16&) { return false; }
-    bool isHppEnabled(const String16&) { return false; }
-    bool isImageDetectionEnabled(const String16&) { return false; }
-    bool isAngleDisabled(const String16&) { return false; }
-    bool isIntelAutoGLFlushApp(const String16&) { return false; }
-    String8 isVulkanRequired(const String16&) { return String8("false"); }
-    bool isGLVBOCacheDisableApp(const String16&) { return false; }
-    bool isFbCompleteCheckDisabled(const String16&) { return false; }
-    bool isUE4GLFlushApp(const String16&) { return false; }
-    bool isGLInvalidateFramebufferFilterApp(const String16&) { return false; }
-    bool isIntelGLDispatchComputeFlushApp(const String16&) { return false; }
-    bool isIgnoreSyncTimeout(const String16&) { return false; }
-    bool isGlNativeSyncDisabled(const String16&) { return false; }
-    bool isGLProgramBinaryApp(const String16&) { return false; }
-    bool isUnreal5App(const String16&) { return false; }
-    bool isUE5PBDisabled(const String16&) { return false; }
-    bool isGLUnmapBufferPerfApp(const String16&) { return false; }
-    bool isTexTargetCheckDisabled(const String16&) { return false; }
-    bool isGlMapBufferRangeHost(const String16&) { return false; }
-    bool isMapBufRangeReadOnceEnabled(const String16&) { return false; }
+    bool isASTCApp(const String16& packageName) { return isAstcApp(packageName); }
+    bool isAstcApp(const String16& packageName) {
+        return bst_graphics_policy::queryBool(bst_graphics_policy::kAstc, packageName, false);
+    }
+    bool isS3tcApp(const String16& packageName) {
+        return bst_graphics_policy::queryBool(bst_graphics_policy::kS3tc, packageName, false);
+    }
+    bool isBptcApp(const String16& packageName) {
+        return bst_graphics_policy::queryBool(bst_graphics_policy::kBptc, packageName, false);
+    }
+    bool isPvrtcApp(const String16& packageName) {
+        return bst_graphics_policy::queryBool(bst_graphics_policy::kPvrtc, packageName, false);
+    }
+    bool isHppEnabled(const String16& packageName) {
+        return bst_graphics_policy::queryBool(bst_graphics_policy::kHppEnabled, packageName, false);
+    }
+    bool isImageDetectionEnabled(const String16& packageName) {
+        return bst_graphics_policy::queryBool(bst_graphics_policy::kImageDetection, packageName,
+                                              false);
+    }
+    bool isAngleDisabled(const String16& packageName) {
+        return bst_graphics_policy::queryBool(bst_graphics_policy::kAngleDisabled, packageName,
+                                              false);
+    }
+    bool isIntelAutoGLFlushApp(const String16& packageName) {
+        return bst_graphics_policy::queryBool(bst_graphics_policy::kIntelAutoGlFlush, packageName,
+                                              false);
+    }
+    String8 isVulkanRequired(const String16& packageName) {
+        return bst_graphics_policy::queryString(bst_graphics_policy::kVulkanRequired, packageName,
+                                                String8("false"));
+    }
+    bool isGLVBOCacheDisableApp(const String16& packageName) {
+        return bst_graphics_policy::queryBool(bst_graphics_policy::kGlVboCacheDisabled,
+                                              packageName, false);
+    }
+    bool isFbCompleteCheckDisabled(const String16& packageName) {
+        return bst_graphics_policy::queryBool(bst_graphics_policy::kFbCompleteCheckDisabled,
+                                              packageName, false);
+    }
+    bool isUE4GLFlushApp(const String16& packageName) {
+        return bst_graphics_policy::queryBool(bst_graphics_policy::kUe4GlFlush, packageName, false);
+    }
+    bool isGLInvalidateFramebufferFilterApp(const String16& packageName) {
+        return bst_graphics_policy::queryBool(bst_graphics_policy::kInvalidateFramebuffer,
+                                              packageName, false);
+    }
+    bool isIntelGLDispatchComputeFlushApp(const String16& packageName) {
+        return bst_graphics_policy::queryBool(bst_graphics_policy::kIntelDispatchFlush,
+                                              packageName, false);
+    }
+    bool isIgnoreSyncTimeout(const String16& packageName) {
+        return bst_graphics_policy::queryBool(bst_graphics_policy::kIgnoreSyncTimeout, packageName,
+                                              false);
+    }
+    bool isGlNativeSyncDisabled(const String16& packageName) {
+        return bst_graphics_policy::queryBool(bst_graphics_policy::kGlNativeSyncDisabled,
+                                              packageName, false);
+    }
+    bool isGLProgramBinaryApp(const String16& packageName) {
+        return bst_graphics_policy::queryBool(bst_graphics_policy::kGlProgramBinary, packageName,
+                                              false);
+    }
+    bool isUnreal5App(const String16& packageName) {
+        return bst_graphics_policy::queryBool(bst_graphics_policy::kUnreal5, packageName, false);
+    }
+    bool isUE5PBDisabled(const String16& packageName) {
+        return bst_graphics_policy::queryBool(bst_graphics_policy::kUe5PbDisabled, packageName,
+                                              false);
+    }
+    bool isGLUnmapBufferPerfApp(const String16& packageName) {
+        return bst_graphics_policy::queryBool(bst_graphics_policy::kGlUnmapBufferPerf, packageName,
+                                              false);
+    }
+    bool isTexTargetCheckDisabled(const String16& packageName) {
+        return bst_graphics_policy::queryBool(bst_graphics_policy::kTexTargetCheckDisabled,
+                                              packageName, false);
+    }
+    bool isGlMapBufferRangeHost(const String16& packageName) {
+        return bst_graphics_policy::queryBool(bst_graphics_policy::kGlMapBufferRangeHost,
+                                              packageName, false);
+    }
+    bool isMapBufRangeReadOnceEnabled(const String16& packageName) {
+        return bst_graphics_policy::queryBool(bst_graphics_policy::kMapBufRangeReadOnce,
+                                              packageName, false);
+    }
     bool isEncodeDCEnabled(const String16&) { return false; }
-    String8 getGLShaderWorkaround(const String16&) { return String8(); }
-    String8 getGLHostInfo(const String16&) { return String8(); }
-    String8 getGlVendor(const String16&) { return String8(); }
-    String8 getGlRenderer(const String16&) { return String8(); }
-    String8 getAgaGlVersion(const String16&) { return String8(); }
-    String8 getAdditionalGlExtensions(const String16&) { return String8(); }
-    String8 getGLExtensionsIgnore(const String16&) { return String8(); }
-    String8 getVkHostInfo(const String16&) { return String8(); }
-    String8 getVKDeviceExtIgnore(const String16&) { return String8(); }
-    int getUnityFlickerPatchRequired(const String16&) { return 0; }
+
+    String8 getGLShaderWorkaround(const String16& packageName) {
+        return bst_graphics_policy::queryString(bst_graphics_policy::kGlShaderWorkaround,
+                                                packageName, String8());
+    }
+    String8 getGLHostInfo(const String16& packageName) {
+        return bst_graphics_policy::queryString(bst_graphics_policy::kGlHostInfo, packageName,
+                                                String8());
+    }
+    String8 getGlVendor(const String16& packageName) {
+        return bst_graphics_policy::queryString(bst_graphics_policy::kGlVendor, packageName,
+                                                String8());
+    }
+    String8 getGlRenderer(const String16& packageName) {
+        return bst_graphics_policy::queryString(bst_graphics_policy::kGlRenderer, packageName,
+                                                String8());
+    }
+    String8 getAgaGlVersion(const String16& packageName) {
+        return bst_graphics_policy::queryString(bst_graphics_policy::kAgaGlVersion, packageName,
+                                                String8());
+    }
+    String8 getAdditionalGlExtensions(const String16& packageName) {
+        return bst_graphics_policy::queryString(bst_graphics_policy::kAdditionalGlExtensions,
+                                                packageName, String8());
+    }
+    String8 getGLExtensionsIgnore(const String16& packageName) {
+        return bst_graphics_policy::queryString(bst_graphics_policy::kGlExtensionsIgnore,
+                                                packageName, String8());
+    }
+    String8 getVkHostInfo(const String16& packageName) {
+        return bst_graphics_policy::queryString(bst_graphics_policy::kVkHostInfo, packageName,
+                                                String8());
+    }
+    String8 getVKDeviceExtIgnore(const String16& packageName) {
+        return bst_graphics_policy::queryString(bst_graphics_policy::kVkDeviceExtIgnore,
+                                                packageName, String8());
+    }
+    int getUnityFlickerPatchRequired(const String16& packageName) {
+        return bst_graphics_policy::queryInt(bst_graphics_policy::kUnityFlickerPatch, packageName,
+                                             0);
+    }
     int getNvidiaThreadedOptVal(const String16&, const char*) { return 0; }
 };
 } // namespace android
+
 #else
 #include <binder/Common.h>
 #include <binder/IBstFilterAppsService.h>

@@ -32,6 +32,11 @@ constexpr char kBstFilterAppsServiceName[] = "bstfilterapps";
 constexpr char kBstFilterAppsDescriptor[] = "com.bluestacks.os.IBstFilterAppsService";
 constexpr int32_t kStatusOk = 0;
 constexpr int32_t kStatusUnknownTransaction = -32;
+#ifdef __ANDROID_VNDK__
+constexpr bool kUseNdkSystemGraphicsPolicy = true;
+#else
+constexpr bool kUseNdkSystemGraphicsPolicy = false;
+#endif
 
 using BinderStatus = int32_t;
 using TransactionCode = uint32_t;
@@ -266,6 +271,11 @@ LIBBINDER_EXPORTED String8 queryString(uint32_t transactionOffset, const String1
     return String8(value.c_str());
 }
 
+static String16 queryString16(uint32_t transactionOffset, const String16& packageName,
+                              const char* fallback = "") {
+    return String16(queryString(transactionOffset, packageName, String8(fallback)));
+}
+
 } // namespace bst_graphics_policy
 
     BstFilterAppsManager::BstFilterAppsManager()
@@ -274,6 +284,9 @@ LIBBINDER_EXPORTED String8 queryString(uint32_t transactionOffset, const String1
 
     sp<IBstFilterAppsService> BstFilterAppsManager::getService()
     {
+#ifdef __ANDROID_VNDK__
+        return nullptr;
+#else
         //int64_t startTime = uptimeMillis();
         mLock.lock();
         sp<IBstFilterAppsService> service = mService;
@@ -297,6 +310,7 @@ LIBBINDER_EXPORTED String8 queryString(uint32_t transactionOffset, const String1
         }
         mLock.unlock();
         return service;
+#endif
     }
 
     bool BstFilterAppsManager::isSmallScreenApp(const String16& callingPackage)
@@ -356,12 +370,20 @@ LIBBINDER_EXPORTED String8 queryString(uint32_t transactionOffset, const String1
 
     bool BstFilterAppsManager::isPvrtcApp(const String16& callingPackage)
     {
+        if (kUseNdkSystemGraphicsPolicy) {
+            return bst_graphics_policy::queryBool(bst_graphics_policy::kPvrtc, callingPackage,
+                                                  false);
+        }
         sp<IBstFilterAppsService> service = getService();
         return service != NULL ? service->isPvrtcApp(callingPackage): false;
     }
 
     bool BstFilterAppsManager::isS3tcApp(const String16& callingPackage)
     {
+        if (kUseNdkSystemGraphicsPolicy) {
+            return bst_graphics_policy::queryBool(bst_graphics_policy::kS3tc, callingPackage,
+                                                  false);
+        }
         sp<IBstFilterAppsService> service = getService();
         return service != NULL ? service->isS3tcApp(callingPackage): false;
     }
@@ -417,6 +439,10 @@ LIBBINDER_EXPORTED String8 queryString(uint32_t transactionOffset, const String1
 
     const String16 BstFilterAppsManager::getGlRenderer(const String16& callingPackage)
     {
+        if (kUseNdkSystemGraphicsPolicy) {
+            return bst_graphics_policy::queryString16(bst_graphics_policy::kGlRenderer,
+                                                      callingPackage);
+        }
         sp<IBstFilterAppsService> service = getService();
         String16 default_return("");
         return service != NULL ? service->getGlRenderer(callingPackage) : default_return ;
@@ -424,6 +450,10 @@ LIBBINDER_EXPORTED String8 queryString(uint32_t transactionOffset, const String1
 
     const String16 BstFilterAppsManager::getGlVendor(const String16& callingPackage)
     {
+        if (kUseNdkSystemGraphicsPolicy) {
+            return bst_graphics_policy::queryString16(bst_graphics_policy::kGlVendor,
+                                                      callingPackage);
+        }
         sp<IBstFilterAppsService> service = getService();
         String16 default_return("");
         return service != NULL ? service->getGlVendor(callingPackage) : default_return;
@@ -468,6 +498,10 @@ LIBBINDER_EXPORTED String8 queryString(uint32_t transactionOffset, const String1
 
     bool BstFilterAppsManager::isAGAGL3Disabled(const String16& callingPackage)
     {
+        if (kUseNdkSystemGraphicsPolicy) {
+            return bst_graphics_policy::queryBool(bst_graphics_policy::kAgaGl3Disabled,
+                                                  callingPackage, false);
+        }
         sp<IBstFilterAppsService> service = getService();
         return service != NULL ? service->isAGAGL3Disabled(callingPackage): false;
     }
@@ -486,6 +520,10 @@ LIBBINDER_EXPORTED String8 queryString(uint32_t transactionOffset, const String1
 
     bool BstFilterAppsManager::isAstcApp(const String16& callingPackage)
     {
+        if (kUseNdkSystemGraphicsPolicy) {
+            return bst_graphics_policy::queryBool(bst_graphics_policy::kAstc, callingPackage,
+                                                  false);
+        }
         sp<IBstFilterAppsService> service = getService();
         return service != NULL ? service->isAstcApp(callingPackage): false;
     }
@@ -505,6 +543,10 @@ LIBBINDER_EXPORTED String8 queryString(uint32_t transactionOffset, const String1
 
     const String16 BstFilterAppsManager::getAgaGlVersion(const String16& callingPackage)
     {
+        if (kUseNdkSystemGraphicsPolicy) {
+            return bst_graphics_policy::queryString16(bst_graphics_policy::kAgaGlVersion,
+                                                      callingPackage);
+        }
         sp<IBstFilterAppsService> service = getService();
         String16 default_return("");
         return service != NULL ? service->getAgaGlVersion(callingPackage) : default_return;
@@ -531,6 +573,10 @@ LIBBINDER_EXPORTED String8 queryString(uint32_t transactionOffset, const String1
 
     const String16 BstFilterAppsManager::getAdditionalGlExtensions(const String16& callingPackage)
     {
+        if (kUseNdkSystemGraphicsPolicy) {
+            return bst_graphics_policy::queryString16(
+                    bst_graphics_policy::kAdditionalGlExtensions, callingPackage);
+        }
         sp<IBstFilterAppsService> service = getService();
         String16 default_return("");
         return service != NULL ? service->getAdditionalGlExtensions(callingPackage): default_return;
@@ -562,6 +608,10 @@ LIBBINDER_EXPORTED String8 queryString(uint32_t transactionOffset, const String1
 
     bool BstFilterAppsManager::isImageDetectionEnabled(const String16& callingPackage)
     {
+        if (kUseNdkSystemGraphicsPolicy) {
+            return bst_graphics_policy::queryBool(bst_graphics_policy::kImageDetection,
+                                                  callingPackage, false);
+        }
         sp<IBstFilterAppsService> service = getService();
         return service != NULL ? service->isImageDetectionEnabled(callingPackage): false;
     }
@@ -599,8 +649,9 @@ LIBBINDER_EXPORTED String8 queryString(uint32_t transactionOffset, const String1
     void BstFilterAppsManager::updateIl2cppPkgs(const String16& callingPackage)
     {
         sp<IBstFilterAppsService> service = getService();
-        service->updateIl2cppPkgs(callingPackage);
-        return;
+        if (service != nullptr) {
+            service->updateIl2cppPkgs(callingPackage);
+        }
     }
 
     bool BstFilterAppsManager::isSuppressedNotificationApp(const String16& callingPackage)
@@ -647,12 +698,20 @@ LIBBINDER_EXPORTED String8 queryString(uint32_t transactionOffset, const String1
 
     bool BstFilterAppsManager::isUE4GLFlushApp(const String16& callingPackage)
     {
+        if (kUseNdkSystemGraphicsPolicy) {
+            return bst_graphics_policy::queryBool(bst_graphics_policy::kUe4GlFlush,
+                                                  callingPackage, false);
+        }
         sp<IBstFilterAppsService> service = getService();
         return service != NULL ? service->isUE4GLFlushApp(callingPackage): false;
     }
 
     const String16 BstFilterAppsManager::isVulkanRequired(const String16& callingPackage)
     {
+        if (kUseNdkSystemGraphicsPolicy) {
+            return bst_graphics_policy::queryString16(bst_graphics_policy::kVulkanRequired,
+                                                      callingPackage, "false");
+        }
         sp<IBstFilterAppsService> service = getService();
         String16 default_return("");
         return service != NULL ? service->isVulkanRequired(callingPackage) : default_return;
@@ -672,6 +731,10 @@ LIBBINDER_EXPORTED String8 queryString(uint32_t transactionOffset, const String1
 
     bool BstFilterAppsManager::isHppEnabled(const String16& callingPackage)
     {
+        if (kUseNdkSystemGraphicsPolicy) {
+            return bst_graphics_policy::queryBool(bst_graphics_policy::kHppEnabled,
+                                                  callingPackage, false);
+        }
         sp<IBstFilterAppsService> service = getService();
         return service != NULL ? service->isHppEnabled(callingPackage): true;
     }
@@ -684,12 +747,20 @@ LIBBINDER_EXPORTED String8 queryString(uint32_t transactionOffset, const String1
 
     bool BstFilterAppsManager::isGLInvalidateFramebufferFilterApp(const String16& callingPackage)
     {
+        if (kUseNdkSystemGraphicsPolicy) {
+            return bst_graphics_policy::queryBool(bst_graphics_policy::kInvalidateFramebuffer,
+                                                  callingPackage, false);
+        }
         sp<IBstFilterAppsService> service = getService();
         return service != NULL ? service->isGLInvalidateFramebufferFilterApp(callingPackage): false;
     }
 
     int BstFilterAppsManager::getUnityFlickerPatchRequired(const String16& callingPackage)
     {
+        if (kUseNdkSystemGraphicsPolicy) {
+            return bst_graphics_policy::queryInt(bst_graphics_policy::kUnityFlickerPatch,
+                                                 callingPackage, 0);
+        }
         sp<IBstFilterAppsService> service = getService();
         return service != NULL ? service->getUnityFlickerPatchRequired(callingPackage) : 0;
     }
@@ -702,6 +773,10 @@ LIBBINDER_EXPORTED String8 queryString(uint32_t transactionOffset, const String1
 
     bool BstFilterAppsManager::isIntelGLDispatchComputeFlushApp(const String16& callingPackage)
     {
+        if (kUseNdkSystemGraphicsPolicy) {
+            return bst_graphics_policy::queryBool(bst_graphics_policy::kIntelDispatchFlush,
+                                                  callingPackage, false);
+        }
         sp<IBstFilterAppsService> service = getService();
         return service != NULL ? service->isIntelGLDispatchComputeFlushApp(callingPackage): false;
     }
@@ -714,12 +789,20 @@ LIBBINDER_EXPORTED String8 queryString(uint32_t transactionOffset, const String1
 
     bool BstFilterAppsManager::isGlNativeSyncDisabled(const String16& callingPackage)
     {
+        if (kUseNdkSystemGraphicsPolicy) {
+            return bst_graphics_policy::queryBool(bst_graphics_policy::kGlNativeSyncDisabled,
+                                                  callingPackage, false);
+        }
         sp<IBstFilterAppsService> service = getService();
         return service != NULL ? service->isGlNativeSyncDisabled(callingPackage): false;
     }
 
     bool BstFilterAppsManager::isAngleDisabled(const String16& callingPackage)
     {
+        if (kUseNdkSystemGraphicsPolicy) {
+            return bst_graphics_policy::queryBool(bst_graphics_policy::kAngleDisabled,
+                                                  callingPackage, false);
+        }
         sp<IBstFilterAppsService> service = getService();
         return service != NULL ? service->isAngleDisabled(callingPackage): false;
     }
@@ -752,18 +835,30 @@ LIBBINDER_EXPORTED String8 queryString(uint32_t transactionOffset, const String1
 
     bool BstFilterAppsManager::isGLProgramBinaryApp(const String16& callingPackage)
     {
+        if (kUseNdkSystemGraphicsPolicy) {
+            return bst_graphics_policy::queryBool(bst_graphics_policy::kGlProgramBinary,
+                                                  callingPackage, false);
+        }
         sp<IBstFilterAppsService> service = getService();
         return service != NULL ? service->isGLProgramBinaryApp(callingPackage): true;
     }
 
     bool BstFilterAppsManager::isGLUnmapBufferPerfApp(const String16& callingPackage)
     {
+        if (kUseNdkSystemGraphicsPolicy) {
+            return bst_graphics_policy::queryBool(bst_graphics_policy::kGlUnmapBufferPerf,
+                                                  callingPackage, false);
+        }
         sp<IBstFilterAppsService> service = getService();
         return service != NULL ? service->isGLUnmapBufferPerfApp(callingPackage): true;
     }
 
     const String16 BstFilterAppsManager::getGLShaderWorkaround(const String16& callingPackage)
     {
+        if (kUseNdkSystemGraphicsPolicy) {
+            return bst_graphics_policy::queryString16(bst_graphics_policy::kGlShaderWorkaround,
+                                                      callingPackage);
+        }
         sp<IBstFilterAppsService> service = getService();
         String16 default_return("");
         return service != NULL ? service->getGLShaderWorkaround(callingPackage) : default_return;
@@ -783,6 +878,10 @@ LIBBINDER_EXPORTED String8 queryString(uint32_t transactionOffset, const String1
 
     bool BstFilterAppsManager::isTexTargetCheckDisabled(const String16& callingPackage)
     {
+        if (kUseNdkSystemGraphicsPolicy) {
+            return bst_graphics_policy::queryBool(bst_graphics_policy::kTexTargetCheckDisabled,
+                                                  callingPackage, false);
+        }
         sp<IBstFilterAppsService> service = getService();
         return service != NULL ? service->isTexTargetCheckDisabled(callingPackage): true;
     }
@@ -802,18 +901,30 @@ LIBBINDER_EXPORTED String8 queryString(uint32_t transactionOffset, const String1
 
     bool BstFilterAppsManager::isGlMapBufferRangeHost(const String16& callingPackage)
     {
+        if (kUseNdkSystemGraphicsPolicy) {
+            return bst_graphics_policy::queryBool(bst_graphics_policy::kGlMapBufferRangeHost,
+                                                  callingPackage, false);
+        }
         sp<IBstFilterAppsService> service = getService();
         return service != NULL ? service->isGlMapBufferRangeHost(callingPackage): true;
     }
 
     bool BstFilterAppsManager::isIgnoreSyncTimeout(const String16& callingPackage)
     {
+        if (kUseNdkSystemGraphicsPolicy) {
+            return bst_graphics_policy::queryBool(bst_graphics_policy::kIgnoreSyncTimeout,
+                                                  callingPackage, false);
+        }
         sp<IBstFilterAppsService> service = getService();
         return service != NULL ? service->isIgnoreSyncTimeout(callingPackage): false;
     }
 
     bool BstFilterAppsManager::isGLVBOCacheDisableApp(const String16& callingPackage)
     {
+        if (kUseNdkSystemGraphicsPolicy) {
+            return bst_graphics_policy::queryBool(bst_graphics_policy::kGlVboCacheDisabled,
+                                                  callingPackage, false);
+        }
         sp<IBstFilterAppsService> service = getService();
         return service != NULL ? service->isGLVBOCacheDisableApp(callingPackage): false;
     }
@@ -826,6 +937,10 @@ LIBBINDER_EXPORTED String8 queryString(uint32_t transactionOffset, const String1
 
     const String16 BstFilterAppsManager::getGLHostInfo(const String16& callingPackage)
     {
+        if (kUseNdkSystemGraphicsPolicy) {
+            return bst_graphics_policy::queryString16(bst_graphics_policy::kGlHostInfo,
+                                                      callingPackage);
+        }
         sp<IBstFilterAppsService> service = getService();
         String16 default_return("");
         return service != NULL ? service->getGLHostInfo(callingPackage) : default_return;
@@ -833,6 +948,10 @@ LIBBINDER_EXPORTED String8 queryString(uint32_t transactionOffset, const String1
 
     const String16 BstFilterAppsManager::getGLExtensionsIgnore(const String16& callingPackage)
     {
+        if (kUseNdkSystemGraphicsPolicy) {
+            return bst_graphics_policy::queryString16(bst_graphics_policy::kGlExtensionsIgnore,
+                                                      callingPackage);
+        }
         sp<IBstFilterAppsService> service = getService();
         String16 default_return("");
         return service != NULL ? service->getGLExtensionsIgnore(callingPackage) : default_return;
@@ -840,6 +959,10 @@ LIBBINDER_EXPORTED String8 queryString(uint32_t transactionOffset, const String1
 
     const String16 BstFilterAppsManager::getVkHostInfo(const String16& callingPackage)
     {
+        if (kUseNdkSystemGraphicsPolicy) {
+            return bst_graphics_policy::queryString16(bst_graphics_policy::kVkHostInfo,
+                                                      callingPackage);
+        }
         sp<IBstFilterAppsService> service = getService();
         String16 default_return("");
         return service != NULL ? service->getVkHostInfo(callingPackage) : default_return;
@@ -847,6 +970,10 @@ LIBBINDER_EXPORTED String8 queryString(uint32_t transactionOffset, const String1
 
     const String16 BstFilterAppsManager::getVKDeviceExtIgnore(const String16& callingPackage)
     {
+        if (kUseNdkSystemGraphicsPolicy) {
+            return bst_graphics_policy::queryString16(bst_graphics_policy::kVkDeviceExtIgnore,
+                                                      callingPackage);
+        }
         sp<IBstFilterAppsService> service = getService();
         String16 default_return("");
         return service != NULL ? service->getVKDeviceExtIgnore(callingPackage) : default_return;
@@ -864,8 +991,12 @@ LIBBINDER_EXPORTED String8 queryString(uint32_t transactionOffset, const String1
         return service != NULL ? service->isHardKeyBoard(callingPackage): false;
     }
 
-     bool BstFilterAppsManager::isIntelAutoGLFlushApp(const String16& callingPackage)
+    bool BstFilterAppsManager::isIntelAutoGLFlushApp(const String16& callingPackage)
     {
+        if (kUseNdkSystemGraphicsPolicy) {
+            return bst_graphics_policy::queryBool(bst_graphics_policy::kIntelAutoGlFlush,
+                                                  callingPackage, false);
+        }
         sp<IBstFilterAppsService> service = getService();
         return service != NULL ? service->isIntelAutoGLFlushApp(callingPackage): true;
     }
@@ -878,18 +1009,30 @@ LIBBINDER_EXPORTED String8 queryString(uint32_t transactionOffset, const String1
 
     bool BstFilterAppsManager::isUnreal5App(const String16& callingPackage)
     {
+        if (kUseNdkSystemGraphicsPolicy) {
+            return bst_graphics_policy::queryBool(bst_graphics_policy::kUnreal5, callingPackage,
+                                                  false);
+        }
         sp<IBstFilterAppsService> service = getService();
         return service != NULL ? service->isUnreal5App(callingPackage): false;
     }
 
     bool BstFilterAppsManager::isUE5PBDisabled(const String16& callingPackage)
     {
+        if (kUseNdkSystemGraphicsPolicy) {
+            return bst_graphics_policy::queryBool(bst_graphics_policy::kUe5PbDisabled,
+                                                  callingPackage, false);
+        }
         sp<IBstFilterAppsService> service = getService();
         return service != NULL ? service->isUE5PBDisabled(callingPackage): false;
     }
 
     bool BstFilterAppsManager::isBptcApp(const String16& callingPackage)
     {
+        if (kUseNdkSystemGraphicsPolicy) {
+            return bst_graphics_policy::queryBool(bst_graphics_policy::kBptc, callingPackage,
+                                                  false);
+        }
         sp<IBstFilterAppsService> service = getService();
         return service != NULL ? service->isBptcApp(callingPackage): false;
     }
@@ -914,12 +1057,20 @@ LIBBINDER_EXPORTED String8 queryString(uint32_t transactionOffset, const String1
 
     bool BstFilterAppsManager::isMapBufRangeReadOnceEnabled(const String16& callingPackage)
     {
+        if (kUseNdkSystemGraphicsPolicy) {
+            return bst_graphics_policy::queryBool(bst_graphics_policy::kMapBufRangeReadOnce,
+                                                  callingPackage, false);
+        }
         sp<IBstFilterAppsService> service = getService();
         return service != NULL ? service->isMapBufRangeReadOnceEnabled(callingPackage): false;
     }
 
     bool BstFilterAppsManager::isFbCompleteCheckDisabled(const String16& callingPackage)
     {
+        if (kUseNdkSystemGraphicsPolicy) {
+            return bst_graphics_policy::queryBool(bst_graphics_policy::kFbCompleteCheckDisabled,
+                                                  callingPackage, false);
+        }
         sp<IBstFilterAppsService> service = getService();
         return service != NULL ? service->isFbCompleteCheckDisabled(callingPackage): false;
     }

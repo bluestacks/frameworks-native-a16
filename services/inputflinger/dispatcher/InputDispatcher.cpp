@@ -6628,6 +6628,31 @@ void InputDispatcher::onAnrLocked(const std::shared_ptr<Connection>& connection)
               connection->getInputChannelName().c_str());
         return;
     }
+    // BS-A16: translated games routinely exceed the 5s dispatch timeout while
+    // acking a focus LOSS during activity switches (the outgoing window is torn
+    // down while the heavy replacement activity starts). A lost-focus ack that
+    // never arrives is harmless - the window is going away - so drop the timed
+    // out focus-loss entries instead of raising a spurious ANR. Focus GAIN acks
+    // keep the original behavior, and any other timed-out entry still ANRs.
+    while (!connection->waitQueue.empty()) {
+        DispatchEntry& front = *connection->waitQueue.front();
+        if (front.eventEntry->type != EventEntry::Type::FOCUS) break;
+        if (static_cast<const FocusEntry*>(front.eventEntry.get())->hasFocus) break;
+        std::unique_ptr<DispatchEntry> droppedEntry = std::move(connection->waitQueue.front());
+        connection->waitQueue.erase(connection->waitQueue.begin());
+        releaseDispatchEntry(std::move(droppedEntry));
+    }
+    if (connection->waitQueue.empty()) {
+        ALOGI("Not raising ANR because only focus-loss entries were pending on %s",
+              connection->getInputChannelName().c_str());
+        return;
+    }
+    if (connection->waitQueue.front()->timeoutTime > now()) {
+        // The remaining head entry is not due yet; re-arm the ANR tracker so a
+        // genuine hang still surfaces when it times out.
+        mAnrTracker.insert(connection->waitQueue.front()->timeoutTime, connection->getToken());
+        return;
+    }
     /**
      * The "oldestEntry" is the entry that was first sent to the application. That entry, however,
      * may not be the one that caused the timeout to occur. One possibility is that window timeout

@@ -1401,6 +1401,20 @@ public:
         else
             return false;
     }
+
+    virtual bool isUEEGLCrashFixApp(const String16& packageName) {
+        Parcel data, reply;
+        data.writeInterfaceToken(IBstFilterAppsService::getInterfaceDescriptor());
+        data.writeString16(packageName);
+        remote()->transact(T_isUEEGLCrashFixApp, data, &reply);
+        // fail on exception
+        if (reply.readExceptionCode() != 0) return false;
+        int32_t res = reply.readInt32();
+        if (res == 1)
+            return true;
+        else
+            return false;
+    }
 };
 
 // ----------------------------------------------------------------------
@@ -2481,6 +2495,18 @@ status_t BnBstFilterAppsService::onTransact(
                 CHECK_INTERFACE(IBstFilterAppsService, data, reply);
                 String16 packageName = data.readString16();
                 bool res = isFbCompleteCheckDisabled(packageName);
+                reply->writeNoException();
+                if (res == true)
+                    reply->writeInt32(1);
+                else
+                    reply->writeInt32(0);
+                return NO_ERROR;
+            } break;
+
+            case T_isUEEGLCrashFixApp: {
+                CHECK_INTERFACE(IBstFilterAppsService, data, reply);
+                String16 packageName = data.readString16();
+                bool res = isUEEGLCrashFixApp(packageName);
                 reply->writeNoException();
                 if (res == true)
                     reply->writeInt32(1);

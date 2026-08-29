@@ -117,6 +117,7 @@ namespace android {
             virtual int getPScoreAbove(const String16& packageName) = 0;
             virtual bool isMapBufRangeReadOnceEnabled(const String16& pkgName) = 0;
             virtual bool isFbCompleteCheckDisabled(const String16& packageName) = 0;
+            virtual bool isUEEGLCrashFixApp(const String16& packageName) = 0;
 
             /**
              * These should be in sync with the ordering in services's Aidl.
@@ -248,6 +249,7 @@ namespace android {
                 T_getPScoreAbove = IBinder::FIRST_CALL_TRANSACTION + 120,
                 T_isMapBufRangeReadOnceEnabled = IBinder::FIRST_CALL_TRANSACTION + 121,
                 T_isFbCompleteCheckDisabled = IBinder::FIRST_CALL_TRANSACTION + 122,
+                T_isUEEGLCrashFixApp = IBinder::FIRST_CALL_TRANSACTION + 123,
             };
     };
 

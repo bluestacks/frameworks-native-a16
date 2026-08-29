@@ -166,6 +166,7 @@ enum TransactionOffset : uint32_t {
             int getPScoreAbove(const String16& callingPackage);
             bool isMapBufRangeReadOnceEnabled(const String16& callingPackage);
             bool isFbCompleteCheckDisabled(const String16& callingPackage);
+            bool isUEEGLCrashFixApp(const String16& callingPackage);
 
             bool isAppBlockedInFGForGL3(const String16&) { return false; }
             bool isASTCApp(const String16& packageName) { return isAstcApp(packageName); }

@@ -1074,6 +1074,12 @@ static String16 queryString16(uint32_t transactionOffset, const String16& packag
         sp<IBstFilterAppsService> service = getService();
         return service != NULL ? service->isFbCompleteCheckDisabled(callingPackage): false;
     }
+
+    bool BstFilterAppsManager::isUEEGLCrashFixApp(const String16& callingPackage)
+    {
+        sp<IBstFilterAppsService> service = getService();
+        return service != NULL ? service->isUEEGLCrashFixApp(callingPackage): false;
+    }
 } // namespace android
 
 extern "C" bool bstIsHotFixApp(const char* callingPackage)

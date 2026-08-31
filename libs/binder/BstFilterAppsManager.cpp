@@ -1082,17 +1082,17 @@ static String16 queryString16(uint32_t transactionOffset, const String16& packag
     }
 } // namespace android
 
-extern "C" bool bstIsHotFixApp(const char* callingPackage)
+extern "C" __attribute__((visibility("default"))) bool bstIsHotFixApp(const char* callingPackage)
 {
     return android::BstFilterAppsManager().isHotFixApp(android::String16(callingPackage));
 }
 
-extern "C" int bst_getXPerfMode(const int32_t uid)
+extern "C" __attribute__((visibility("default"))) int bst_getXPerfMode(const int32_t uid)
 {
     return android::BstFilterAppsManager().getXperfMode(uid);
 }
 
-extern "C" bool bstIsHotFixAppByUid(const int32_t uid)
+extern "C" __attribute__((visibility("default"))) bool bstIsHotFixAppByUid(const int32_t uid)
 {
     return android::BstFilterAppsManager().isHotFixAppByUid(uid);
 }

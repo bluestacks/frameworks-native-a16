@@ -11,6 +11,7 @@
 #include <utils/String8.h>
 #include <utils/SystemClock.h>
 
+#include <cstdio>
 #include <dlfcn.h>
 #include <mutex>
 #include <string>
@@ -127,12 +128,36 @@ bool isAppPolicyClient() {
     return appId >= AID_APP_START && appId <= AID_APP_END;
 }
 
+// BS-A16: never initialize binder from a zygote process. Once ProcessState
+// exists in a parent, libbinder marks every forked child "used after fork"
+// and aborts it in AppRuntime::onZygoteInit ("ProcessState can not be used
+// after fork"). An app zygote (e.g. com.android.chrome_zygote) that queries
+// bstfilterapps therefore kills all sandboxed children it forks. Detect
+// zygote-like processes by /proc/self/cmdline; titles end in "_zygote".
+bool isZygoteLikeProcess() {
+    [[clang::no_destroy]] static const bool zygote = [] {
+        char buf[256] = {};
+        FILE* f = fopen("/proc/self/cmdline", "re");
+        if (f == nullptr) return false;
+        size_t n = fread(buf, 1, sizeof(buf) - 1, f);
+        fclose(f);
+        if (n == 0) return false;
+        std::string name(buf);  // first NUL-terminated token only
+        return name == "zygote" || name == "zygote64" || name == "webview_zygote" ||
+               (name.size() > 7 && name.compare(name.size() - 7, 7, "_zygote") == 0);
+    }();
+    return zygote;
+}
+
 struct BinderCache {
     std::mutex lock;
     AIBinder* binder = nullptr;
 };
 
 AIBinder* acquireSystemBstFilterService() {
+    if (isZygoteLikeProcess()) {
+        return nullptr;
+    }
     const NdkBinderApi& api = getNdkBinderApi();
     if (!api.complete()) {
         static std::once_flag logOnce;
@@ -287,6 +312,9 @@ static String16 queryString16(uint32_t transactionOffset, const String16& packag
 #ifdef __ANDROID_VNDK__
         return nullptr;
 #else
+        if (isZygoteLikeProcess()) {
+            return nullptr;
+        }
         //int64_t startTime = uptimeMillis();
         mLock.lock();
         sp<IBstFilterAppsService> service = mService;
@@ -811,6 +839,9 @@ static String16 queryString16(uint32_t transactionOffset, const String16& packag
     {
         (void)uid;  // A16DBG:P2:D9 silence -Wunused-parameter in vendor variant (uid only used in system path)
 #ifndef __ANDROID_VNDK__  // A16DBG:P2:D9 PermissionController system-only; vendor fail-open
+        if (isZygoteLikeProcess()) {
+            return false;
+        }
         Vector<String16> packages;
         PermissionController pc;
         pc.getPackagesForUid(uid, packages);

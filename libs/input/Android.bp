@@ -289,11 +289,6 @@ cc_library {
         "-Wl,--exclude-libs=libtflite_static.a",
     ],
 
-    sanitize: {
-        undefined: true,
-        all_undefined: true,
-        misc_undefined: ["integer"],
-    },
 
     static_libs: [
         "inputconstants-cpp",

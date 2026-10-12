@@ -3801,6 +3801,9 @@ void InputDispatcher::startDispatchCycleLocked(nsecs_t currentTime,
                         << "Publishing " << *dispatchEntry << " to "
                         << connection->getInputChannelName();
                 const MotionEntry& motionEntry = static_cast<const MotionEntry&>(eventEntry);
+                const bool adjust = (motionEntry.source & AINPUT_SOURCE_TOUCHSCREEN) == AINPUT_SOURCE_TOUCHSCREEN;
+                if (adjust) dispatchEntry->timeoutTime += 5'000'000'000;
+
                 status = publishMotionEvent(*connection, *dispatchEntry);
                 if (status == BAD_VALUE) {
                     logDispatchStateLocked();
@@ -3814,6 +3817,7 @@ void InputDispatcher::startDispatchCycleLocked(nsecs_t currentTime,
             }
 
             case EventEntry::Type::FOCUS: {
+                dispatchEntry->timeoutTime += 15'000'000'000;
                 const FocusEntry& focusEntry = static_cast<const FocusEntry&>(eventEntry);
                 status = connection->inputPublisher.publishFocusEvent(dispatchEntry->seq,
                                                                       focusEntry.id,

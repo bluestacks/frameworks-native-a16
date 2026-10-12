@@ -19,6 +19,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <android/input.h>
 #include <android/keycodes.h>
 #include <attestation/HmacKeyManager.h>
 #include <binder/Parcel.h>
@@ -239,6 +240,17 @@ bool KeyCharacterMap::getFallbackAction(int32_t keyCode, int32_t metaState,
         FallbackAction* outFallbackAction) const {
     outFallbackAction->keyCode = 0;
     outFallbackAction->metaState = 0;
+
+#if defined(__aarch64__)
+    /* Shared Generic.kcm keeps Esc as none for Windows. Mac arm64 uses Esc as BACK. */
+    if (keyCode == AKEYCODE_ESCAPE &&
+            (metaState & (AMETA_ALT_ON | AMETA_ALT_LEFT_ON | AMETA_ALT_RIGHT_ON |
+                          AMETA_CTRL_ON | AMETA_CTRL_LEFT_ON | AMETA_CTRL_RIGHT_ON |
+                          AMETA_META_ON | AMETA_META_LEFT_ON | AMETA_META_RIGHT_ON)) == 0) {
+        outFallbackAction->keyCode = AKEYCODE_BACK;
+        return true;
+    }
+#endif
 
     bool result = false;
     const Behavior* behavior = getKeyBehavior(keyCode, metaState);

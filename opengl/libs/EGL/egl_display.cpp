@@ -88,6 +88,14 @@ egl_display_t::~egl_display_t() {
 
 egl_display_t* egl_display_t::get(EGLDisplay dpy) {
     if (uintptr_t(dpy) == 0) {
+#if defined(__aarch64__)
+        // Marvel passes a null display. arm64 returns the existing one. x86_64 stays null.
+        const std::lock_guard<std::mutex> lock(displayMapLock);
+        if (!displayMap.empty()) {
+            ALOGW("EGL display 0 fallback");
+            return displayMap.begin()->second.get();
+        }
+#endif
         return nullptr;
     }
 
